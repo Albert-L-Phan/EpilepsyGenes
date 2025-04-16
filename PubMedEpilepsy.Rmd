@@ -1,0 +1,181 @@
+---
+title: "PubMed_Epilepsy"
+author: "Albert"
+date: "8 December 2024"
+output: html_document
+---
+
+```{r data}
+library(pubmed.mineR)
+library(lsa)
+library(SnowballC)
+library(wordcloud)
+
+abstracts=readabs("epilepsy_AND_gene.txt") #PubMed Epilepsy AND Gene 8th Dec 2023-8th Dec 2024
+
+pmids=abstracts@PMID
+gene=gene_atomization(abstracts)
+words=word_atomizations(abstracts)
+summary(gene)
+```
+```{r tdm}
+abstract.bodies=abstracts@Abstract
+SEpilepsy=searchabsL(abstracts)
+Con=Find_conclusion(abstracts) #conclusion of abstracts
+#create list of words
+###tdm_wordsA=c("epilepsy", "channel")
+
+#create list of gene
+#take gene data from first column
+tdm_wordsG=gene[,1] 
+
+#merge the 2 word lists
+###tdm_wordsAG=c(tdm_wordsA,tdm_wordsG)
+tdm_wordsAG=tdm_wordsG
+#create term document matrix
+tdmAG=tdm_for_lsa(SEpilepsy,tdm_wordsAG)
+
+#plot wordcloud
+m <- as.matrix(tdmAG)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 10)
+
+```
+
+
+```{r wordcloud}
+set.seed(1234)
+wordcloud(words = d$word, freq = d$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(8, "Dark2"))
+
+barplot(d[1:20,]$freq, las = 2, names.arg = d[1:20,]$word,
+        col ="lightblue", main ="Most frequent words",
+        ylab = "Word frequencies")
+
+```
+
+
+```{r latent semantic analysis}
+lsaspace=lsa(tdmAG,dims=dimcalc_share());
+newmatrix=as.textmatrix(lsaspace)
+associated_words=lapply(tdm_wordsAG,function(x){associate(newmatrix,x,measure="cosine",threshold=0.9)})
+names(associated_words)=tdm_wordsAG
+associated_words[1:10]
+cos_sim_calc(tdmAG) #output file cossimdata.txt #cytoscape
+cos=read.table("cossimdata.txt",header=FALSE,sep="\t")
+write.csv(cos, "cossimdata.csv")
+```
+
+```{r graphical network}
+
+cos=na.omit(cos)
+library(igraph)
+relations <- data.frame(from=cos[,1], to=cos[,2],   weight=cos[,3])
+relations2=relations[-row(relations)[relations == 0],] #remove 0
+g.1a <- graph.data.frame(relations2, directed=FALSE)
+```
+
+
+
+
+
+
+
+```{r subset network}
+#https://www.r-bloggers.com/network-visualization-in-r-with-the-igraph-package/
+
+redung.1a<-V(g.1a)[degree(g.1a)<0]
+
+subg.1a<-delete_vertices(g.1a, redung.1a) #exclude them from the graph
+
+subg.1a = simplify(subg.1a)
+V(subg.1a)$size<-0.5
+E(subg.1a)$size<-E(subg.1a)$weight^3
+
+library(magrittr)
+# Provides a mechanism for chaining commands with a new forward-pipe operator, %>%
+pr=subg.1a%>%  
+page_rank(directed = FALSE) %>% 
+use_series("vector") %>% 
+sort(decreasing = TRUE) %>% 
+as.matrix %>% 
+set_colnames("page.rank")
+head(pr,10)
+plot(pr, main="Top nodes by page rank", cex=0.5)
+cutoff <- quantile(pr[, "page.rank"], probs = 0)
+popular <- pr[pr[, "page.rank"] >= cutoff, ] 
+toKeep <- names(popular)
+vids <- V(subg.1a)[toKeep]
+gs <- induced.subgraph(subg.1a, vids = toKeep)
+#cl <- walktrap.community(gs, steps = 3)
+# Define ob
+
+
+
+k.max <- 20
+wss <- sapply(1:k.max, 
+              function(k){kmeans(get.adjacency(gs, sparse=FALSE), k, nstart=50,iter.max = 20 )$tot.withinss})
+wss
+plot(1:k.max, wss,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+
+
+
+
+
+
+k<- kmeans(get.adjacency(gs, sparse=FALSE), centers = 13)$cluster
+k <- as.data.frame(k)
+k$gene <- rownames(as.data.frame(k))
+
+
+V(subg.1a)[k[k==1,]$gene]$color<-"#000066"
+V(subg.1a)[k[k==2,]$gene]$color<-"#0000FF"
+V(subg.1a)[k[k==3,]$gene]$color<-"#330066"
+V(subg.1a)[k[k==4,]$gene]$color<-"#9900CC"
+V(subg.1a)[k[k==5,]$gene]$color<-"#9999FF"
+V(subg.1a)[k[k==6,]$gene]$color<-"#990066"
+V(subg.1a)[k[k==7,]$gene]$color<-"#FF0099"
+V(subg.1a)[k[k==8,]$gene]$color<-"#FF00FF"
+V(subg.1a)[k[k==9,]$gene]$color<-"#FFCCFF"
+V(subg.1a)[k[k==10,]$gene]$color<-"#FF0000"
+V(subg.1a)[k[k==11,]$gene]$color<-"#FF9999"
+V(subg.1a)[k[k==12,]$gene]$color<-"#FF6600"
+V(subg.1a)[k[k==13,]$gene]$color<-"#FFFF00"
+
+
+
+par(mai=c(0,0,0,0))            #this specifies the size of the margins. the default settings leave too much free space on all sides (if no axes are printed)
+plot(subg.1a,                #the graph to be plotted
+layout=layout.fruchterman.reingold,    # the layout method. see the igraph documentation for details
+#main='Epilepsy Genes',    #specifies the title
+vertex.label.dist=0.3,            #puts the name labels slightly off the dots
+vertex.frame.color='black',         #the color of the border of the dots 
+vertex.label.color='black',        #the color of the name labels
+vertex.label.font=2,            #the font of the name labels
+vertex.label=V(subg.1a)$name,        #specifies the lables of the vertices. in this case the 'name' attribute is used
+vertex.label.cex=0.35, #specifies the size of the font of the labels. can also be made to vary
+)
+
+
+
+
+library("rgexf")
+gephi <- igraph.to.gexf(subg.1a)
+plot(gephi)
+
+
+
+
+
+
+```
+
+
+
+
+
