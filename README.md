@@ -5,6 +5,8 @@ In this study, we investigated relationships between genes associated with epile
 Since clusters may exist in the data, where a family of genes are highly associated with each other, and not associated with any gene outside of the family, we used the walktrap algorithm to identify these clusters. The largest eight clusters that were identified using the walktrap algorithm have been coloured. The igraph diagram was then imported into Gephi to make the graph interactive.   
 
 ## Diagram
-![Epilepsy_Genes](https://github.com/user-attachments/assets/4a4072c8-bee8-4f65-aca1-e144d7824fc3)
+
+![Epilepsy_Genes_new](https://github.com/user-attachments/assets/e7500f99-808d-4a78-82d7-cc0e330c7fa4)
+
 Click this link for an interactive version of the diagram:
 https://albert-l-phan.github.io/EpilepsyGenes/
